@@ -1,0 +1,197 @@
+import React from 'react';
+import './App.css';
+
+const initialMessages = [
+  { text: 'Halo, ada yang bisa saya bantu ?', type: 'received' }
+  // Tambahkan template pertanyaan dan jawaban di sini sesuai kebutuhan
+];
+
+const Message = ({ text, type }) => {
+  const messageType = type === 'sent' ? 'sent' : 'received';
+  return <div className={`message ${messageType}`}>{text}</div>;
+};
+
+class ChatApp extends React.Component {
+  state = {
+    messages: initialMessages,
+    recommendedQuestions: [
+        { text: 'Bagaimana cara melakukan pemesanan?', answer: 'Anda dapat melakukan pemesanan melalui halaman kami dengan mengklik tombol "Beli" pada produk yang Anda inginkan.' },
+        { text: 'Apakah produk ini tersedia dalam warna lain?', answer: 'Ya, produk kami tersedia dalam beberapa varian warna. Silakan cek halaman produk untuk melihat pilihan warna yang tersedia.' },
+        { text: 'Berapa lama pengiriman produk?', answer: 'Waktu pengiriman bervariasi tergantung lokasi Anda. Umumnya, pengiriman memakan waktu sekitar 3-5 hari kerja setelah proses verifikasi pembayaran.' }
+        // Tambahkan jawaban untuk setiap pertanyaan di sini
+    ],
+    showRecommended: false,
+    selectedQuestion: '',
+    typingEffect: false // State untuk mengontrol efek mengetik
+  };
+
+  sendMessage = () => {
+    const messageInput = document.getElementById('message-input').value;
+    if (messageInput.trim() !== '') {
+      const newMessage = { text: messageInput, type: 'sent' };
+      this.setState(prevState => ({
+        messages: [...prevState.messages, newMessage]
+      }), () => {
+        const chatBox = document.getElementById('chat-box');
+        chatBox.scrollTop = chatBox.scrollHeight;
+        this.handleBotResponse(messageInput);
+      });
+      document.getElementById('message-input').value = '';
+    }
+  };
+
+  handleBotResponse = messageInput => {
+    const { recommendedQuestions } = this.state;
+      const foundQuestion = recommendedQuestions.find(
+        question => question.text.toLowerCase() === messageInput.toLowerCase()
+    );
+
+    if (foundQuestion) {
+        const newMessage = { text: foundQuestion.answer, type: 'received' };
+        this.setState(
+          prevState => ({
+            messages: [...prevState.messages, newMessage],
+            showRecommended: false,
+            selectedQuestion: ''
+          }),
+          () => {
+            const chatBox = document.getElementById('chat-box');
+            chatBox.scrollTop = chatBox.scrollHeight;
+          }
+        );
+    } else {
+      this.setState(
+        {
+          typingEffect: true // Aktifkan efek mengetik
+        },
+        () => {
+          const API_URL = "https://api.openai.com/v1/chat/completions";
+          const requestOptions = {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer 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`
+            },
+            body: JSON.stringify({
+              model: "gpt-3.5-turbo",
+              messages: [{ role: "user", content: messageInput }]
+            })
+          };
+
+          fetch(API_URL, requestOptions)
+            .then(res => res.json())
+            .then(data => {
+              const gptResponse = data.choices[0].message.content;
+              const newMessage = { text: gptResponse, type: 'received' };
+              this.setState(
+                prevState => ({
+                  messages: [...prevState.messages, newMessage],
+                  showRecommended: false,
+                  selectedQuestion: '',
+                  typingEffect: false // Matikan efek mengetik setelah menerima respons
+                }),
+                () => {
+                  const chatBox = document.getElementById('chat-box');
+                  chatBox.scrollTop = chatBox.scrollHeight;
+                }
+              );
+            })
+            .catch(error => {
+                console.error('Error fetching data:', error);
+                const newMessage = {
+                  text:
+                    "Terjadi kesalahan dalam memproses pertanyaan. Mohon maaf atas ketidaknyamanan ini.",
+                  type: 'received'
+                };
+                this.setState(
+                  prevState => ({
+                    messages: [...prevState.messages, newMessage],
+                    showRecommended: true,
+                    selectedQuestion: messageInput
+                  }),
+                  () => {
+                    const chatBox = document.getElementById('chat-box');
+                    chatBox.scrollTop = chatBox.scrollHeight;
+                  }
+                );
+            });
+        }
+      );
+    }
+  };
+
+  handleQuestionClick = question => {
+    const newMessage = { text: question.text, type: 'sent' };
+    this.setState(prevState => ({
+      messages: [...prevState.messages, newMessage],
+      showRecommended: false,
+      selectedQuestion: question.text
+    }), () => {
+      this.handleBotResponse(question.text);
+    });
+  };
+
+  toggleRecommended = () => {
+    this.setState(prevState => ({
+      showRecommended: !prevState.showRecommended
+    }));
+  };
+
+  render() {
+    const { messages, recommendedQuestions, showRecommended, selectedQuestion, typingEffect } = this.state;
+
+    return (
+      <div className="container">
+        <div className="header">
+          <img src="../asset/bot.png" alt="Foto Profil" className="profile-pic" />
+          <h3>Mariyadi | Virtual Assistant</h3>
+        </div>
+        <div className="chat">
+          <div className="chat-box" id="chat-box">
+            {messages.map((message, index) => (
+              <Message key={index} text={message.text} type={message.type} />
+            ))}
+            {typingEffect && ( // Tampilkan efek mengetik jika typingEffect aktif
+              <div className="message received typing">
+                <span className="dot"></span>
+                <span className="dot"></span>
+                <span className="dot"></span>
+              </div>
+            )}
+          </div>
+          {showRecommended && (
+            <div className="recommended-questions">
+              <p>Pertanyaan rekomendasi:</p>
+              <div className="recommended-questions-list">
+                {recommendedQuestions.map((question, index) => (
+                  <div
+                    key={index}
+                    className={
+                      question.text === selectedQuestion
+                        ? 'recommended-question selected'
+                        : 'recommended-question'
+                    }
+                    onClick={() => this.handleQuestionClick(question)}
+                  >
+                    {question.text}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+        <button onClick={this.toggleRecommended}>
+          {showRecommended ? 'Sembunyikan Pertanyaan Rekomendasi' : 'Tampilkan Pertanyaan Rekomendasi'}
+        </button>
+        <div className="input">
+          <input type="text" id="message-input" placeholder="Tulis pesan..." />
+          <button id="sendButton" onClick={this.sendMessage}>
+            Kirim
+          </button>
+        </div>
+      </div>
+    );
+  }
+}
+
+export default ChatApp;
